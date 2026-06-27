@@ -59,7 +59,7 @@ $(document).ready(function() {
 
         // Call Frappe API
         frappe.call({
-            method: "erpnext_sysnova_ai.erpnext_sysnova_ai.api.chat_with_gemini",
+            method: "erpnext_sysnova_ai.api.chat_with_gemini",
             args: {
                 message: message
             },

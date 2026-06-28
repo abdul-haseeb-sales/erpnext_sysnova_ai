@@ -58,21 +58,21 @@ Try asking:
 
 ## Detailed Troubleshooting / Common Errors
 
-Agar installation, rename, ya execution ke dauran niche diye gaye errors aate hain, to in steps se solve karein:
+If you encounter any of the following errors during installation, renaming, or execution, follow these steps to resolve them:
 
 ---
 
 ### 1. Error: `Module HR not found` (Site crash during migrate/startup)
-* **Wajah (Cause):** `sites/apps.txt` ke missing hone ya aakhir mein line break (newline) na hone ki wajah se prompt ya other text `hrms` ke sath chipak jata hai aur system use load nahi kar pata.
-* **Hal (Solution):** Run these commands on your server:
+* **Cause:** The `sites/apps.txt` file is either missing or does not end with a newline character, causing the `hrms` app entry to get corrupted or linked with the prompt hostname. Thus, the virtual environment fails to load it.
+* **Solution:** Run these commands on your server:
   ```bash
   # Rewrite apps.txt with correct line breaks
   printf "frappe\nemployee_self_service\ncrm\ndrive\neducation\npayments\nerpnext\ntelephony\nhelpdesk\nhrms\nai_assistant\n" > sites/apps.txt
   
-  # Manually link HRMS in python env
+  # Manually link HRMS in the python virtual environment
   ./env/bin/pip install -e apps/hrms
   
-  # Migrate and restart
+  # Migrate the database and restart bench
   bench clear-cache
   bench --site your-site.com migrate
   bench restart
@@ -81,13 +81,13 @@ Agar installation, rename, ya execution ke dauran niche diye gaye errors aate ha
 ---
 
 ### 2. Error: `ModuleNotFoundError: No module named 'ai_assistant'` (Bench commands crash loop)
-* **Wajah (Cause):** Agar `sites/apps.txt` mein app ka naam register ho par python virtual environment mein app link na hui ho, to bench startup par crash ho jata hai aur baqi commands block ho jati hain.
-* **Hal (Solution):** 
-  1. Pehle manually python environment mein link karein:
+* **Cause:** The app `ai_assistant` is registered in `sites/apps.txt`, but it has not been linked in the python virtual environment yet. Frappe crashes during startup trying to load the missing module, blocking all other bench commands.
+* **Solution:** 
+  1. Link the app module manually in the virtual environment first:
      ```bash
      ./env/bin/pip install -e apps/ai_assistant
      ```
-  2. Phir normal setup run karein:
+  2. Once linked, proceed with the normal setup commands:
      ```bash
      bench --site your-site.com install-app ai_assistant
      bench build --app ai_assistant
@@ -98,8 +98,8 @@ Agar installation, rename, ya execution ke dauran niche diye gaye errors aate ha
 ---
 
 ### 3. Error: `TypeError [ERR_INVALID_ARG_TYPE]` (bench build crash during compilation)
-* **Wajah (Cause):** Custom app folder ke andar `package.json` file missing ho ya system ko na mile, jis se Yarn workspaces link nahi hotey aur esbuild script crash ho jati hai.
-* **Hal (Solution):** Make sure karein ke `apps/ai_assistant/package.json` file exist karti ho. Phir commands run karein:
+* **Cause:** The custom app directory is missing a `package.json` file, causing Yarn workspaces and esbuild compilation to fail during asset building.
+* **Solution:** Ensure that the `apps/ai_assistant/package.json` file exists. Then run:
   ```bash
   bench setup requirements
   bench build --app ai_assistant
@@ -110,8 +110,8 @@ Agar installation, rename, ya execution ke dauran niche diye gaye errors aate ha
 ---
 
 ### 4. Error: `404 Not Found` in browser console (Chat bubble not showing)
-* **Wajah (Cause):** `/assets/ai_assistant/js/ai_assistant_widget.js` ka status 404 hota hai kyunki bench build ke dauran assets symlink (`sites/assets/ai_assistant`) generate nahi ho saki.
-* **Hal (Solution):** PuTTY terminal par manually symlink link karein:
+* **Cause:** The asset symlink (`sites/assets/ai_assistant`) was not automatically created in the sites assets directory during build, leading Nginx to return a 404 error when loading `ai_assistant_widget.js`.
+* **Solution:** Create the symlink manually on your server:
   ```bash
   ln -s ../../apps/ai_assistant/ai_assistant/public sites/assets/ai_assistant
   bench clear-cache
@@ -121,29 +121,29 @@ Agar installation, rename, ya execution ke dauran niche diye gaye errors aate ha
 ---
 
 ### 5. Error: `No module named 'ai_assistant.ai_assistant'`
-* **Wajah (Cause):** Frontend JavaScript whitelisted API call path mein module ka naam duplicate ho raha ho (`ai_assistant.ai_assistant`).
-* **Hal (Solution):** `ai_assistant_widget.js` file check karein aur call path ko badal kar `ai_assistant.api.chat_with_gemini` karein.
+* **Cause:** The whitelisted method path in the JavaScript API call has a duplicate namespace (`ai_assistant.ai_assistant`).
+* **Solution:** Verify `ai_assistant_widget.js` and change the API call path to `ai_assistant.api.chat_with_gemini`.
 
 ---
 
 ### 6. Error: `404 models/gemini-1.5-flash is not found`
-* **Wajah (Cause):** Google ne `gemini-1.5-flash` model ko complete deprecate kar diya hai aur ab yeh `v1beta` ya `v1` par available nahi hai.
-* **Hal (Solution):** Code (`api.py`) mein model ka naam badal kar **`gemini-2.5-flash`** karein.
+* **Cause:** Google has deprecated and retired the `gemini-1.5-flash` model on the `v1beta` / `v1` endpoints.
+* **Solution:** Update the model name in your `api.py` to **`gemini-2.5-flash`**.
 
 ---
 
 ### 7. Error: `429 You exceeded your current quota (limit: 0)`
-* **Wajah (Cause):** Google AI Studio par aapke Google account ke free tier ki request limits **0** ho sakti hain agar aapka account Cloud restrictions ya regional policy ke tehat flagged ho.
-* **Hal (Solution):** 
-  Google AI Studio par jaakar click karein: **"Create API key in new project"** (existing GCP project select na karein). Ek naye project mein bani key automatic free limits allow kar deti hai.
+* **Cause:** Google AI Studio has set your free tier limits to **0** for this Google account or project due to a missing billing method or regional/account policy flags.
+* **Solution:** 
+  Go to Google AI Studio and click **"Create API key in new project"** (do not select an existing GCP project). Creating the key in a new clean project automatically enables the free tier quota.
 
 ---
 
 ### 8. Error: `429 You exceeded your current quota (limit: 20)`
-* **Wajah (Cause):** Google AI Studio Free Tier par `gemini-2.5-flash` ka daily requests limit **20 calls per day** hai. Agar debugging ke dauran 20 calls pure ho jayein to yeh error reset hone tak aata hai.
-* **Hal (Solution):** 
-  1. Reset hone ka wait karein (har 24 ghante mein automatically reset ho jata hai).
-  2. Ya phir AI Studio par **"Create API key in new project"** par click kar ke ek naya project key generate karein (naye project se mazeed 20 requests ki limit mil jayegi).
+* **Cause:** The Gemini 2.5 Flash free tier has a daily request limit of **20 calls per day per project**. Exceeding it triggers this rate-limit error.
+* **Solution:** 
+  1. Wait for the 24-hour cycle to reset (resets automatically at UTC midnight).
+  2. Or go to Google AI Studio and click **"Create API key in new project"** to get a fresh API key with another 20 daily requests limit.
 
 ---
 
